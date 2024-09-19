@@ -127,11 +127,7 @@ contract OrderSwap {
 
         require(success, OrderSwapError.TokenTransferFailed());
 
-        success = IERC20(tokenAAddress).transferFrom(
-            address(this),
-            msg.sender,
-            tokenAAmount
-        );
+        success = IERC20(tokenAAddress).transfer(msg.sender, tokenAAmount);
 
         require(success, OrderSwapError.TokenTransferFailed());
 
