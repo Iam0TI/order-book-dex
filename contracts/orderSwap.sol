@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.27;
 
-import {OrderSwapError} from "./orderSwapError.sol";
+import {OrderSwapError, OrderSwapEvent} from "./orderSwapLibaries.sol";
 interface IERC20 {
     function totalSupply() external view returns (uint256);
     function balanceOf(address account) external view returns (uint256);
@@ -19,7 +19,7 @@ interface IERC20 {
     function symbol() external view returns (string memory);
 }
 
-contract OrderSwap is OrderSwapError {
+contract OrderSwap {
     // this limitation are due to time contraint
     //Single Order per Token: The contract only allows one active order per token B address.
     //This limits the number of concurrent orders for the same token pair.
@@ -27,10 +27,11 @@ contract OrderSwap is OrderSwapError {
     // Fixed Exchange Rate: Once an order is created, the exchange rate cannot be modified. Users must create a new order to change the rate.
     // No Order Cancellation: Users cannot cancel an order before the deadline. They must wait for the deadline to pass to withdraw their funds.
 
-    event DepositForSwap(string, uint, string, uint, uint);
-    event TradeSuccessful(string, uint, string, uint);
-    event UserWithdrawFunds(string, uint);
-
+    // enum Status {
+    //     Pending,
+    //     Filled,
+    //     Canceled
+    // }
     struct UserOrder {
         address userAddress;
         address tokenAAddress;
@@ -38,6 +39,7 @@ contract OrderSwap is OrderSwapError {
         uint256 tokenAAmount;
         uint256 tokenBAmount;
         uint256 deadline;
+        bool active;
     }
 
     // mapping of token B to user order
@@ -54,35 +56,45 @@ contract OrderSwap is OrderSwapError {
         uint256 _deadline
     ) external {
         // returns (address, uint256)
-        require(msg.sender != address(0), ZeroAddressDetected());
+        require(msg.sender != address(0), OrderSwapError.ZeroAddressDetected());
 
-        require(_tokenAAddress != address(0), ZeroAddressDetected());
+        require(
+            _tokenAAddress != address(0),
+            OrderSwapError.ZeroAddressDetected()
+        );
 
-        require(_tokenBAddress != address(0), ZeroAddressDetected());
+        require(
+            _tokenBAddress != address(0),
+            OrderSwapError.ZeroAddressDetected()
+        );
 
-        require(_tokenAAmount > 0, InvalidAmount());
+        require(_tokenAAmount > 0, OrderSwapError.InvalidAmount());
 
-        require(_tokenBAmount > 0, InvalidAmount());
+        require(_tokenBAmount > 0, OrderSwapError.InvalidAmount());
 
-        require(_deadline > block.timestamp + 10 minutes, InvalidDeadline());
+        require(
+            _deadline > block.timestamp + 10 minutes,
+            OrderSwapError.InvalidDeadline()
+        );
         bool success = IERC20(_tokenAAddress).transferFrom(
             msg.sender,
             address(this),
             _tokenAAmount
         );
 
-        require(success, TokenTransferFailed());
+        require(success, OrderSwapError.TokenTransferFailed());
         orders[_tokenBAddress] = UserOrder(
             msg.sender,
             _tokenAAddress,
             _tokenBAddress,
             _tokenAAmount,
             _tokenBAmount,
-            _deadline
+            _deadline,
+            true
         );
 
         orderCounts = orderCounts + 1;
-        emit DepositForSwap(
+        emit OrderSwapEvent.DepositForSwap(
             IERC20(_tokenAAddress).symbol(),
             _tokenAAmount,
             IERC20(_tokenBAddress).symbol(),
@@ -94,11 +106,11 @@ contract OrderSwap is OrderSwapError {
     function trade(address _tokenBAddress) external {
         require(
             orders[_tokenBAddress].userAddress != address(0),
-            OrderDoesNotExit()
+            OrderSwapError.OrderDoesNotExit()
         );
         require(
-            orders[_tokenBAddress].deadline < block.timestamp,
-            DeadlineHasPassed()
+            orders[_tokenBAddress].deadline > block.timestamp,
+            OrderSwapError.DeadlineHasPassed()
         );
 
         address userAddress = orders[_tokenBAddress].userAddress;
@@ -113,7 +125,7 @@ contract OrderSwap is OrderSwapError {
             tokenBAmount
         );
 
-        require(success, TokenTransferFailed());
+        require(success, OrderSwapError.TokenTransferFailed());
 
         success = IERC20(tokenAAddress).transferFrom(
             address(this),
@@ -121,9 +133,9 @@ contract OrderSwap is OrderSwapError {
             tokenAAmount
         );
 
-        require(success, TokenTransferFailed());
+        require(success, OrderSwapError.TokenTransferFailed());
 
-        emit TradeSuccessful(
+        emit OrderSwapEvent.TradeSuccessful(
             IERC20(_tokenBAddress).symbol(),
             tokenBAmount,
             IERC20(tokenAAddress).symbol(),
@@ -131,15 +143,12 @@ contract OrderSwap is OrderSwapError {
         );
     }
 
-    function UserWithdraw(address _tokenBAddress) external {
-        require(msg.sender != address(0), ZeroAddressDetected());
+    function cancle(address _tokenBAddress) external {
+        require(msg.sender != address(0), OrderSwapError.ZeroAddressDetected());
+        require(orders[_tokenBAddress].active == true);
         require(
             orders[_tokenBAddress].userAddress == msg.sender,
-            NotOrderOwner()
-        );
-        require(
-            orders[_tokenBAddress].deadline < block.timestamp,
-            DeadlineHasPassed()
+            OrderSwapError.NotOrderOwner()
         );
 
         address tokenAAddress = orders[_tokenBAddress].tokenAAddress;
@@ -151,8 +160,11 @@ contract OrderSwap is OrderSwapError {
             msg.sender,
             tokenAAmount
         );
-        require(success, TokenTransferFailed());
+        require(success, OrderSwapError.TokenTransferFailed());
 
-        emit UserWithdrawFunds(IERC20(tokenAAddress).symbol(), tokenAAmount);
+        emit OrderSwapEvent.OrderCancled(
+            IERC20(tokenAAddress).symbol(),
+            tokenAAmount
+        );
     }
 }
