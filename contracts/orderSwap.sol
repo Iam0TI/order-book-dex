@@ -20,13 +20,6 @@ interface IERC20 {
 }
 
 contract OrderSwap {
-    // this limitation are due to time contraint
-    //Single Order per Token: The contract only allows one active order per token B address.
-    //This limits the number of concurrent orders for the same token pair.
-    // No Partial Fills: Orders must be filled completely. There's no support for partial order execution.
-    // Fixed Exchange Rate: Once an order is created, the exchange rate cannot be modified. Users must create a new order to change the rate.
-    // No Order Cancellation: Users cannot cancel an order before the deadline. They must wait for the deadline to pass to withdraw their funds.
-
     // enum Status {
     //     Pending,
     //     Filled,
