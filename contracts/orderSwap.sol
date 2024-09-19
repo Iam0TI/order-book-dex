@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.27;
 
+import {OrderSwapError} from "./orderSwapError.sol";
 interface IERC20 {
     function totalSupply() external view returns (uint256);
     function balanceOf(address account) external view returns (uint256);
@@ -18,14 +19,13 @@ interface IERC20 {
     function symbol() external view returns (string memory);
 }
 
-contract OrderSwap {
-    error TokenTransferFailed();
-    error InvalidAmount();
-    error ZeroAddressDetected();
-    error OrderDoesNotExit();
-    error InvalidDeadline();
-    error DeadlineHasPassed();
-    error NotOrderOwner();
+contract OrderSwap is OrderSwapError {
+    // this limitation are due to time contraint
+    //Single Order per Token: The contract only allows one active order per token B address.
+    //This limits the number of concurrent orders for the same token pair.
+    // No Partial Fills: Orders must be filled completely. There's no support for partial order execution.
+    // Fixed Exchange Rate: Once an order is created, the exchange rate cannot be modified. Users must create a new order to change the rate.
+    // No Order Cancellation: Users cannot cancel an order before the deadline. They must wait for the deadline to pass to withdraw their funds.
 
     event DepositForSwap(string, uint, string, uint, uint);
     event TradeSuccessful(string, uint, string, uint);
